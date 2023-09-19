@@ -1,4 +1,5 @@
 import psycopg2
+from psycopg2.sql import SQL, Identifier
 
 
 def create_db(conn):
@@ -45,29 +46,32 @@ def add_phone(conn, id, number):
             """, (id, number,))
         print('Added phone:', end=' ')
         return cur.fetchone()
-# , name, lastname, email
 
 
 def change_client(conn, id, name=None, lastname=None, email=None):
+    arg_list = {'name': name, 'lastname': lastname, 'email': email}
     with conn.cursor() as cur:
+        for key, arg in arg_list.items():
+            if arg:
+                cur.execute(SQL("UPDATE Client SET {}=%s WHERE id=%s").format(Identifier(key)), (arg, id))
         cur.execute("""
-            UPDATE Client
-            SET name=%s, lastname=%s, email=%s
+            SELECT * FROM Client
             WHERE id=%s
-            RETURNING id, name, lastname, email;
-            """, (name, lastname, email, id,))
+            """, id)
         print('Changed client:', end=' ')
         return cur.fetchone()
 
 
 def change_phone(conn, id, number=None):
+    arg_list = {'number': number}
     with conn.cursor() as cur:
+        for key, arg in arg_list.items():
+            if arg:
+                cur.execute(SQL("UPDATE Phone SET {}=%s WHERE id=%s").format(Identifier(key)), (arg, id))
         cur.execute("""
-            UPDATE Phone
-            SET number=%s
-            WHERE id=%s
-            RETURNING id, number;
-            """, (number, id,))
+                SELECT * FROM Phone
+                WHERE id=%s
+                """, id)
         print('Changed phone:', end=' ')
         return cur.fetchone()
 
@@ -79,41 +83,49 @@ def delete_phone (conn, id, number=None):
             WHERE id=%s OR number=%s
             RETURNING id, number;
             """, (id, number,))
-        print('Deleted client:', end=' ')
+        if number is not None:
+            print('Deleted phone:', end=' ')
         return cur.fetchone()
 
 
-def delete_client(conn, id, name=None, lastname=None, email=None):
+def delete_client(conn, id, name=None, lastname=None, email=None, number=None):
+    delete_phone(conn, id)
     with conn.cursor() as cur:
         cur.execute("""
             DELETE FROM Client
             WHERE id=%s OR name=%s OR lastname=%s OR email=%s
             RETURNING id, name, lastname, email;
             """, (id, name, lastname, email,))
-        print('Deleted phone:', end=' ')
+        print('Deleted client:', end=' ')
         return cur.fetchone()
 
 
 def find_client(conn, name=None, lastname=None, email=None, number=None):
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT c.name, c.email, p.number FROM Client c
-            LEFT JOIN Phone p ON c.id = p.id
-            WHERE c.name=%s OR c.lastname=%s OR c.email=%s OR p.number=%s;
-            """, (name, lastname, email, number,))
+        SELECT * FROM Client c
+        JOIN Phone p ON c.id = p.id
+        WHERE (name = %(name)s OR %(name)s IS NULL)
+        AND (lastname = %(lastname)s OR %(lastname)s IS NULL)
+        AND (email = %(email)s OR %(email)s IS NULL)
+        AND (number = %(number)s OR %(number)s IS NULL);
+        """, {'name': name, 'lastname': lastname, 'email': email, 'number': number})
         print('Found:', end=' ')
         return cur.fetchone()
 
 
-with psycopg2.connect(database="HomeWorkPythonSQL", user="postgres", password="896261228ll") as conn:
-    create_db(conn)
-    print(add_client(conn, 'Jerry', 'Smits', 'jerry@mail.ru'))
-    print(add_phone(conn, '1', '89355463327'))
-    print(find_client(conn, 'Jerry'))
-    print(change_client(conn, '1', 'Albert', 'Richards', 'albert@mail.com'))
-    print(change_phone(conn, '1', '89109364535'))
-    print(find_client(conn, 'Albert'))
-    print(delete_phone(conn, '1', '89109467816'))
-    print(delete_client(conn, '1'))
-    print(find_client(conn, 'Albert'))
-conn.close()
+if __name__ == '__main__':
+    with psycopg2.connect(database="HomeWorkPythonSQL", user="postgres", password="896261228ll") as conn:
+        create_db(conn)
+        print(add_client(conn, 'Jerry', 'Smits', 'jerry@mail.ru'))
+        print(add_phone(conn, '1', '89355463327'))
+        print(find_client(conn, 'Jerry'))
+        print(change_client(conn, '1', 'Albert', 'Richards', 'albert@mail.com'))
+        print(change_phone(conn, '1', '89109364535'))
+        print(find_client(conn, 'Albert'))
+        print(change_client(conn, '1', 'Johan'))
+        print(find_client(conn, 'Johan'))
+        print(delete_phone(conn, '1', '89109467816'))
+        print(delete_client(conn, '1'))
+        print(find_client(conn, 'Albert'))
+    conn.close()
